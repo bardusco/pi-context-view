@@ -10,9 +10,10 @@ Its header is:
 Context Injections · [INITIAL]
 ```
 
-`INITIAL` uses the active `mdHeading` treatment. Runtime inspection is
-roadmap-only, so no Runtime label, switching key, or Runtime status renders
-until that step lands. If the combined header does not fit, put title and label
+`INITIAL` uses the active `mdHeading` treatment. Runtime prompt/message inspection is
+roadmap-only, so no Runtime label or switching key renders. A separate,
+one-shot declaration observation may refine the first matching real capture's
+Definition sections; a silent-probe Initial always remains unobserved. If the combined header does not fit, put title and label
 on separate lines with one empty row before and after the label.
 
 ## Contribution tree
@@ -44,7 +45,7 @@ Present Initial contributions in this order:
   - Skills (K), with one content-only child per skill
   - Built-in Tools (N), with one child per active built-in tool
 - each extension/tool source
-  - one child per active tool
+  - one child per inventory tool; hidden/unobserved direct schemas read 0 with Dropped
   - `system prompt additions` when text appended after pi's footer was
     attributed to that source
   - injected messages identified by `customType` where available
@@ -74,6 +75,15 @@ the header and show a `[Degraded: …]` indicator beside the description, keepin
 the fallback hierarchy usable. Below both, the description block ends with one
 [legend bullet](previews.md#marker-legend) per marker the rows carry — `Dropped`,
 `Moved`, or neither — and collapses with the rest of the block.
+
+## Declaration notice
+
+A non-collapsing notice under the header states whether declarations were observed
+at the provider hook or remain unavailable/incomplete. It explains that Dropped
+schema previews are inventory and do not contribute to TOTAL. Prompt snippets
+and guidelines actually rendered still count. Observed provider-only declarations
+and complete OpenAI namespace wrappers appear under `unattributed` and count once.
+Later requests do not change Initial; use Usage for compatible latest declarations.
 
 ## Injection preview
 

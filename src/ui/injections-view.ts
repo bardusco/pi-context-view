@@ -53,6 +53,8 @@ const TOKEN_LEADER_GAP = 4;
 export interface InjectionsViewInput {
 	readonly snapshot: InitialSnapshot;
 	readonly degradedReason?: string;
+	/** Fixed accounting notices, never raw provider content. */
+	readonly notices?: readonly string[];
 }
 
 /** Shared token-value column measured after the fixed cursor column. */
@@ -469,12 +471,11 @@ export class InjectionsView {
 
 	/** Wrapped degraded-capture reason placed below the dialog header. */
 	private degradedWarningLines(width: number): string[] {
-		if (this.input.degradedReason === undefined) return [];
-		const reason = this.theme.fg(
-			"warning",
-			`${BODY_INDENT}${normalizeInlineText(this.input.degradedReason)}`,
-		);
-		return wrapTextWithAnsi(reason, width);
+		const notices = [this.input.degradedReason, ...(this.input.notices ?? [])]
+			.filter((notice): notice is string => notice !== undefined);
+		return notices.flatMap(notice => wrapTextWithAnsi(this.theme.fg(
+			"warning", `${BODY_INDENT}${normalizeInlineText(notice)}`,
+		), width));
 	}
 
 	/**

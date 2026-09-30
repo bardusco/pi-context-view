@@ -4,7 +4,12 @@
  * Passively captures the first real turn, or runs one on-demand silent probe
  * when a context view is opened before any real turn.
  */
-import { buildSessionContext, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { branchHasContextChange, declarationEvidence, type DeclarationEvidence } from "./declaration-evidence.ts";
+import {
+	declarationNotice, projectToolDeclarations, ToolDeclarationCapture, UNOBSERVED_DECLARATIONS,
+	type DeclarationObservation,
+} from "./tool-declarations.ts";
 
 import { ConfigStore, createDefaultConfigFile } from "./config.ts";
 import {
@@ -37,6 +42,27 @@ export default function (pi: ExtensionAPI) {
 	const compaction = new CompactionState();
 	const configStore = new ConfigStore();
 	let persistedIdentityCount = 0;
+	const declarations = new ToolDeclarationCapture();
+	let initialDeclarations: DeclarationObservation = UNOBSERVED_DECLARATIONS;
+	let pendingInitial: (DeclarationEvidence & { turn: number }) | undefined;
+	let turnSequence = 0;
+	let inTurn = false;
+	let capturedBranchLength = 0;
+
+	function invalidateDeclarations(): void {
+		declarations.invalidate();
+		pendingInitial = undefined;
+		inTurn = false;
+	}
+	function latestDeclarations(ctx: ExtensionContext): DeclarationObservation {
+		if (branchHasContextChange(ctx, capturedBranchLength)) declarations.invalidate();
+		const evidence = declarationEvidence(pi, ctx);
+		return declarations.read(evidence.key, evidence.branchIds);
+	}
+	pi.on("session_tree", invalidateDeclarations);
+	pi.on("session_before_switch", invalidateDeclarations);
+	pi.on("session_before_fork", invalidateDeclarations);
+	pi.on("model_select", invalidateDeclarations);
 
 	/** Persist identities (role and timestamp only, never content) not yet written this runtime. */
 	function persistProbeIdentities(): void {
@@ -47,6 +73,8 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.on("session_start", (_event, ctx) => {
+		invalidateDeclarations();
+		initialDeclarations = UNOBSERVED_DECLARATIONS;
 		compaction.finish();
 		// Rehydrate probe identities from all prior runtimes so persisted probe
 		// messages stay out of later model contexts and Usage after resume,
@@ -60,15 +88,18 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_before_compact", (event) => {
+		invalidateDeclarations();
 		compaction.begin(event.signal);
 	});
 
 	// Pi ends every observed compaction with exactly one of these two events.
 	pi.on("session_compact", () => {
+		invalidateDeclarations();
 		compaction.finish();
 	});
 
 	pi.on("session_compact_failed", () => {
+		invalidateDeclarations();
 		compaction.finish();
 	});
 
@@ -80,6 +111,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", (event) => {
+		invalidateDeclarations();
 		probe.beginRun(readProbeToken());
 		// The chained prompt here already carries additions from extensions loaded
 		// earlier; anything the context event adds came from extensions after us.
@@ -87,8 +119,12 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("turn_start", (_event, ctx) => {
+		turnSequence += 1;
+		pendingInitial = undefined;
+		inTurn = !probe.isCurrentRun;
 		if (probe.isCurrentRun) ctx.abort();
 	});
+	pi.on("turn_end", () => { inTurn = false; });
 
 	pi.on("message_start", (event) => {
 		probe.recordMessage(event.message);
@@ -103,6 +139,7 @@ export default function (pi: ExtensionAPI) {
 		const messages = probe.filterMessages(event.messages);
 		// Lazy: this event fires once per LLM request, but only the freezing call
 		// reads these inputs, and the baseline rebuild alone is O(session).
+		const firstCapture = capture.snapshot === undefined;
 		capture.finalize(() => ({
 			systemPrompt: ctx.getSystemPrompt(),
 			messages,
@@ -114,10 +151,31 @@ export default function (pi: ExtensionAPI) {
 			promptSources: collectPromptSources(pi.getAllTools(), pi.getCommands()),
 			origin: probe.isCurrentRun ? "synthetic-probe" : "real-turn",
 		}));
+		if (firstCapture && capture.snapshot !== undefined && inTurn && !probe.isCurrentRun) {
+			pendingInitial = { ...declarationEvidence(pi, ctx), turn: turnSequence };
+		}
 		return messages === event.messages ? undefined : { messages };
 	});
 
+	pi.on("before_provider_request", (event, ctx) => {
+		// Compaction/auxiliary calls and silent probes are not ordinary turn evidence.
+		if (!inTurn || probe.isCurrentRun || compaction.isActive) return;
+		const evidence = declarationEvidence(pi, ctx);
+		const observation = declarations.observe(event.payload, ctx.model?.api, evidence.key, evidence.branchIds);
+		capturedBranchLength = evidence.branchIds.length;
+		const pending = pendingInitial;
+		pendingInitial = undefined; // One shot, including unsupported or malformed payloads.
+		if (pending?.turn === turnSequence && pending.key === evidence.key &&
+			pending.branchIds.length === evidence.branchIds.length &&
+			pending.branchIds.every((id, index) => evidence.branchIds[index] === id)) {
+			initialDeclarations = observation;
+		}
+		// Notification-only observer: never return or mutate the provider payload.
+	});
+
 	pi.on("agent_settled", (_event, ctx) => {
+		inTurn = false;
+		pendingInitial = undefined;
 		if (!probe.isCurrentRun) return;
 		if (ctx.mode === "tui") ctx.ui.setWorkingVisible(true);
 		probe.settle(capture.snapshot !== undefined);
@@ -125,6 +183,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", () => {
+		invalidateDeclarations();
 		compaction.finish();
 		// A shutdown mid-probe can leave probe messages already persisted in the
 		// session; write their identities so the next runtime keeps filtering them.
@@ -153,8 +212,9 @@ export default function (pi: ExtensionAPI) {
 			const initial = await resolveInitialCapture(pi, capture, probe, compaction, ctx);
 			if (command.view === "injections") {
 				await showInjectionsView(ctx, {
-					snapshot: initial.snapshot,
+					snapshot: projectToolDeclarations(initial.snapshot, initialDeclarations),
 					degradedReason: initial.degradedReason,
+					notices: [declarationNotice(initialDeclarations)],
 				});
 				return;
 			}
@@ -173,9 +233,10 @@ export default function (pi: ExtensionAPI) {
 				activeToolNames: pi.getActiveTools(),
 				promptSources: collectPromptSources(pi.getAllTools(), pi.getCommands()),
 			});
+			const observed = latestDeclarations(ctx);
 			await showUsageView(ctx, {
 				usage: computeUsage({
-					snapshot: current,
+					snapshot: projectToolDeclarations(current, observed),
 					messages,
 					reported: toReportedUsage(ctx.getContextUsage()),
 					modelLabel: ctx.model?.id,
@@ -183,7 +244,7 @@ export default function (pi: ExtensionAPI) {
 				}),
 				degradedReason: initial.degradedReason,
 				// Reported inside the view: a notification would stay hidden behind the fullscreen overlay.
-				notices: loadedConfig.warnings,
+				notices: [declarationNotice(observed), ...loadedConfig.warnings],
 				categoryColors: loadedConfig.config.categoryColors,
 				mapSize: loadedConfig.config.mapSize,
 			});

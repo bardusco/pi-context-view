@@ -91,6 +91,22 @@ function stripSgr(text: string): string {
 	return text.replace(/\u001b\[[\d;]*m/g, "");
 }
 
+test("InjectionsView accounting notices survive description collapse and fit narrow/resized frames", () => {
+	let height = 24;
+	const notice = "Tool-definition estimates are incomplete: inventory schemas are inspectable as Dropped but excluded from totals.";
+	const view = new InjectionsView(createTheme(), { snapshot: snapshot(40), notices: [notice] }, () => {}, () => height);
+	for (const width of [60, 80, 120]) {
+		for (const rows of [16, 24, 40]) {
+			height = rows;
+			view.invalidate();
+			const lines = view.render(width);
+			assert.ok(lines.length <= height);
+			assert.ok(lines.every(line => visibleWidth(line) <= width));
+			assert.match(lines.map(stripSgr).join("\n"), /estimates are incomplete/);
+		}
+	}
+});
+
 test("InjectionsView follows pi selector styling and cursor alignment", () => {
 	const child = item("child", "pi", true, 20);
 	const parent: InjectionItem = { ...item("parent", "pi", true, 50), children: [child] };

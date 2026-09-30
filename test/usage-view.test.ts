@@ -143,6 +143,21 @@ function createView(
 	);
 }
 
+test("UsageView keeps accounting availability notices visible across widths and short heights", () => {
+	let height = 24;
+	const view = createView(createTheme(), { usage: usage(), notices: ["Tool-definition estimates are incomplete: inventory schemas are inspectable as Dropped but excluded from totals."] }, () => {}, () => height);
+	for (const width of [60, 80, 120]) {
+		for (const rows of [16, 24, 40]) {
+			height = rows;
+			view.invalidate();
+			const lines = view.render(width);
+			assert.ok(lines.length <= height);
+			assert.ok(lines.every(line => visibleWidth(line) <= width));
+			assert.match(lines.map(stripSgr).join("\n"), /estimates are incomplete/);
+		}
+	}
+});
+
 test("UsageView renders the 16x16 map and matching category legend with semantic colors", () => {
 	// Tall enough for the whole legend to sit beside the map without scrolling.
 	const view = createView(createTheme(), { usage: usage() }, () => {}, () => 33);

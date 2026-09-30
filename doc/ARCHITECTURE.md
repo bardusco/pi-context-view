@@ -8,11 +8,12 @@ extension can read, and how that data reaches the two views.
 
 | View       | What it shows                                                                           | When its data changes                                     |
 | ---------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Injections | The captured system prompt, tools, and injected messages.                               | Never after Initial is captured.                          |
-| Usage      | Replayed branch prompt/tools and session messages, plus Initial's request-only changes. | Rebuilt when the view opens; Initial changes stay frozen. |
+| Injections | Frozen prompt/messages and tool inventory, with a one-shot matching declaration observation. | Original snapshot stays frozen; its matching declarations refine the view once. |
+| Usage | Replayed branch prompt/messages plus compatible latest observed declarations. | Rebuilt on open; unavailable declarations are excluded with an incomplete-estimate notice. |
 
-**Initial** is a frozen snapshot of the system prompt, active tools, and injected messages at the first
-capture after this extension loads. There are two ways to capture it:
+**Initial** is a frozen snapshot of the system prompt, active-tool inventory, and injected messages at the first
+capture after this extension loads. Active inventory is not evidence of model-visible declarations;
+see [Provider Declaration Accounting](#provider-declaration-accounting). There are two ways to capture it:
 
 - **You send a prompt.** While pi prepares the model request, `pi-context-view` copies the prompt,
   tools, and injected messages it can see. The request then continues normally. This is capture
@@ -78,8 +79,8 @@ Provider-specific serialization                 NOT used
   into the provider's request format
   |
   v
-before_provider_request handlers                NOT used for capture
-  May replace the outgoing payload
+before_provider_request handlers                OBSERVE: tools only
+  May replace the outgoing payload; later handlers remain unobserved
   |
   v
 Send to provider
@@ -121,7 +122,7 @@ session branch later cannot recover those request-only changes.
 - `pi.getActiveTools()` and `pi.getAllTools()` supply the active tool names,
   definitions, and source information. `pi.getCommands()` supplies additional
   extension source information for prompt attribution.
-  **Goal:** estimate Initial's active tools and provide Usage's legacy fallback.
+  **Goal:** collect inspectable inventory/provenance, never infer sent declarations from activation alone.
   For transcript-backed Usage, recorded declarations supply definitions and the
   active set; current registration metadata supplies provenance and guideline
   attribution only. Unregistered recorded tools stay visible as unattributed.
@@ -324,10 +325,34 @@ it sees.
   after the `context` handlers and keeps recording the structured sections, so
   only Initial sees it: Usage reads the transcript instead.
 
-- **Provider-payload rewrites: no extension, whatever the load order.**
-  `before_provider_request` handlers and provider transports run after the
-  capture point, so an effective prompt they rewrite there never reaches
-  Initial or Usage.
+- **Provider-payload rewrites: declarations only, at this handler's position.**
+  `before_provider_request` observes recognized tool declarations after earlier
+  handlers. It does not capture rewritten prompts/messages, observe later handlers,
+  or prove HTTP delivery. Declaration observation is passive and process-local.
+
+## Provider Declaration Accounting
+
+This local fork targets Pi 0.99.1; development pins match the host. Its detailed
+contract and fault-first matrix live in [CODEMODE-ACCOUNTING-SPEC.md](CODEMODE-ACCOUNTING-SPEC.md).
+`src/tool-declarations.ts` bounds and copies only recognized declaration data;
+`src/declaration-evidence.ts` hashes loadout/model inputs and identifies the branch.
+The observer never modifies a payload, starts a request, logs raw data, or persists it.
+
+- Count the provider-observed Definition, including the expanded `codemode` description,
+  rather than the original registered schema. Hidden direct schemas stay inspectable as
+  zero-token Dropped inventory. Preserve prompt snippets/guidelines actually rendered.
+- Unsupported/malformed/oversized declarations invalidate the whole set. Unknown evidence
+  is not an authoritative empty set: exclude definitions and show that estimates are incomplete.
+- OpenAI namespace declarations count once as a complete `namespace:NAME` row; nested direct
+  inventory is not added again. Google is a semantic per-function estimate, without group framing.
+- Initial's declaration record is one-shot, correlated to the first real capture's local turn,
+  identical branch IDs, and loadout key; probes never arm it. Later requests only update Usage.
+- Usage accepts the latest observation only for an identical model/loadout hash and an exact
+  branch prefix. Session/tree/model/compaction changes, new runs, context edits, loadout drift,
+  and parse failures invalidate it. A historical Initial record does not become current Usage evidence.
+- Both views state the observation scope, incomplete fallback, and inventory semantics in a
+  non-collapsing notice. Char-based estimates are not measured token breakdowns; Pi's reported
+  total remains independent and may differ. Later provider handlers can still rewrite the request.
 
 ## Usage and Attribution
 
@@ -402,7 +427,9 @@ request-only messages retain the existing merge. Session-backed custom messages
 count from the current branch, not again from Initial. `computeUsage()` skips
 system messages because the prompt/tool snapshot already accounts for them.
 
-This is a provider-independent semantic estimate, not a wire-size estimate.
+Prompt/messages remain a provider-independent semantic estimate, not a wire-size estimate.
+Tool Definition sections instead use compatible observed declarations projected over this
+snapshot, or zero-cost inventory with an incomplete-estimate notice when unavailable.
 Some providers keep earlier section versions or tool declarations in the cached
 transcript; others collapse them. Usage deliberately does not count that history,
 patch framing, or provider-specific serialization. A forced prompt is likewise
@@ -851,7 +878,9 @@ Persisted probe records contain only role and timestamp identities.
 | `src/probe-token.ts`      | Carry the probe token through the async context of this extension's own send.                 |
 | `src/measure.ts`          | Split and estimate prompt/tool contributions without pi API access.                           |
 | `src/prompt-blocks.ts`    | Locate XML sections and legacy/moved tool surfaces, excluding nested/fenced examples.         |
-| `src/transcript.ts`       | Replay system content, section patches, and tool declarations without provider serialization. |
+| `src/transcript.ts` | Replay system content, section patches, and tool inventory without provider serialization. |
+| `src/tool-declarations.ts` | Bound/passively extract declarations, project Definitions, and keep latest branch-bound evidence. |
+| `src/declaration-evidence.ts` | Derive process-local model/loadout hash and branch prefix without logging inputs. |
 | `src/prompt-additions.ts` | Identify prompt additions and make source-attribution guesses.                                |
 | `src/usage.ts`            | Classify messages; build usage totals and previews.                                           |
 | `src/model.ts`            | Define types, ownership, hierarchy, and grouping.                                             |
@@ -878,7 +907,8 @@ probe request isolation and message ownership, not a relaxation of those goals.
 - Synthetic probe entries never reach later model contexts or Usage, including
   after resume, reload, or fork.
 - Initial freezes exactly once per extension runtime; if capture never succeeds,
-  the fallback does not freeze it.
+  the fallback does not freeze it. Its view may receive one separately correlated
+  declaration projection; unrelated requests never change the frozen Initial view.
 - Raw content appears only after Enter and is never logged or newly persisted.
 - Parent and child contributions are never double-counted.
 - Usage counts the replayed branch prompt/tool state once, never again as system

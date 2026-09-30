@@ -8,6 +8,14 @@ TypeScript pi extension (`src/index.ts`) with two TUI-only overlays and one util
 
 The command accepts only `usage`, `injections`, and `config`; keep both views unavailable outside TUI mode and `config` available in every run mode.
 
+## Local fork contract
+
+- Branch `fix/codemode-payload-accounting` is a local fork; no upstream PR, release, or push without the owner's later request.
+- Provider declaration accounting and its test matrix live in `doc/CODEMODE-ACCOUNTING-SPEC.md`. Never infer visible schemas from active tools; preserve zero-cost inventory previews and real prompt-line ownership.
+- `src/tool-declarations.ts` is the passive bounded declaration parser/projector; `src/declaration-evidence.ts` owns freshness metadata. Keep provider payloads and raw captures process-local, never mutate or persist them.
+- Development targets Pi 0.99.1. The upstream workspace config needs modern pnpm; on this machine use `npm exec --yes --package=pnpm@12.8.1 -- pnpm check` (pnpm 9 rejects the workspace file).
+- `node scripts/smoke-codemode.mjs` is the isolated real-CLI/PTY smoke, with a synthetic loopback provider and no personal credentials/data.
+
 ## Sources of truth
 
 | Path                  | Read before                                                                                                                                                                                              |

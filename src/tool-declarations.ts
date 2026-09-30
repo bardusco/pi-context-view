@@ -35,6 +35,7 @@ export function parseToolDeclarations(payload: unknown, api: string | undefined)
 	if (!record(payload)) return unavailable("Malformed provider declaration payload.");
 	if (payload.tools === undefined) return { status: "observed", tools: [] };
 	if (!Array.isArray(payload.tools)) return unavailable("Malformed provider declaration list.");
+	if (payload.tools.length > MAX_DECLARATIONS) return unavailable("Provider declarations exceed limits.");
 	// Preflight only this subtree; never traverse messages, headers, or credentials.
 	if (!boundedJson(payload.tools)) return unavailable("Provider declarations exceed limits or are not JSON data.");
 	const tools: ObservedToolDeclaration[] = [];
@@ -93,15 +94,19 @@ function boundedJson(value: unknown): boolean {
 	const ancestors = new Set<object>();
 	const visit = (current: unknown, depth: number): boolean => {
 		if (++nodes > MAX_NODES || depth > MAX_DEPTH) return false;
-		if (typeof current === "string") { bytes += Buffer.byteLength(current); return bytes <= MAX_BYTES; }
+		// Conservative JSON-escaping budget bounds allocations before stringify.
+		if (typeof current === "string") { bytes += 6 * Buffer.byteLength(current) + 2; return bytes <= MAX_BYTES; }
 		if (current === null || current === undefined || typeof current === "boolean") return true;
 		if (typeof current === "number") return Number.isFinite(current);
 		if (typeof current !== "object" || ancestors.has(current)) return false;
 		if (!Array.isArray(current) && Object.getPrototypeOf(current) !== Object.prototype && Object.getPrototypeOf(current) !== null) return false;
 		ancestors.add(current);
-		for (const [key, child] of Object.entries(current)) {
-			bytes += Buffer.byteLength(key) + 4;
-			if (bytes > MAX_BYTES || !visit(child, depth + 1)) return false;
+		for (const key in current) {
+			if (!Object.prototype.hasOwnProperty.call(current, key)) continue;
+			const descriptor = Object.getOwnPropertyDescriptor(current, key);
+			if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) return false;
+			bytes += 6 * Buffer.byteLength(key) + 4;
+			if (bytes > MAX_BYTES || !visit(descriptor.value, depth + 1)) return false;
 		}
 		ancestors.delete(current);
 		return true;
@@ -119,7 +124,8 @@ export function projectToolDeclarations(snapshot: InitialSnapshot, observation: 
 			const children = item.children.map(project);
 			return createAggregateItem(item.id, item.kind, item.source, item.label, children);
 		}
-		const declaration = declarations.get(item.label);
+		const candidate = declarations.get(item.label);
+		const declaration = candidate && !used.has(candidate.name) ? candidate : undefined;
 		if (declaration) used.add(declaration.name);
 		const sections = (item.sections ?? []).map(section => section.label !== "Definition" ? section : declaration ? {
 			label: "Definition", text: declaration.text, jsonSpan: { start: 0, end: declaration.text.length },

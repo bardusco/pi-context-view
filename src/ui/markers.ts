@@ -46,7 +46,7 @@ const MARKER_LEGENDS: Record<ContextMarker, MarkerLegend> = {
 	dropped: {
 		keyword: "Dropped",
 		color: "toolDiffRemoved",
-		explanation: " parts were replaced by a custom system prompt and are counted nowhere.",
+		explanation: " parts are excluded from this estimate: suppressed prompt content or hidden/unobserved direct tool schemas.",
 	},
 	moved: {
 		keyword: "Moved",
@@ -56,7 +56,7 @@ const MARKER_LEGENDS: Record<ContextMarker, MarkerLegend> = {
 	},
 };
 
-/** Themed marker naming content pi never sent, for a preview subheader or a hierarchy row. */
+/** Themed marker naming content excluded from this estimate, retained only for inspection. */
 export function droppedMarker(theme: Theme): string {
 	return stateMarker(theme, MARKER_LEGENDS.dropped);
 }

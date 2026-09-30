@@ -60,9 +60,11 @@ border colorizers; never hardcode ANSI escapes, hex values, or named terminal
 colors. Use pi's injected keybindings, `matchesKey`, ANSI-aware width helpers,
 render caching, and theme invalidation.
 
-Content a `--system-prompt` replacement dropped carries a fixed `toolDiffRemoved`
-`Dropped` marker directly after the estimate it explains, in hierarchy rows
-and preview subheaders alike. It marks a state rather than a usage category, so
+Suppressed prompt content and hidden/unobserved direct tool schemas carry a fixed
+`toolDiffRemoved` `Dropped` marker directly after the estimate it explains, in
+hierarchy rows and preview subheaders alike. Hidden/unobserved schemas remain
+inspectable inventory only; this marker means excluded from this estimate,
+not necessarily absent from every representation of the request. It marks a state rather than a usage category, so
 it is never configurable, and its 0-token entries never color map cells. A row
 too narrow for the whole marker drops it instead of truncating it.
 

@@ -51,8 +51,12 @@ summaries. Preserve `≈` when the usage total is estimated.
 
 Non-fatal problems appear as `warning` notices between the header and the
 dashboard, indented like other body content and wrapped to the width: the
-degraded-capture reason first, then configuration problems such as ignored
-entries. Sanitize every notice, since configuration text is untrusted. Cap the
+degraded-capture reason first, then the declaration-accounting notice, then
+configuration problems such as ignored entries. The declaration notice states
+the provider-hook observation scope or warns that definitions are unavailable
+and the estimate is incomplete. Hidden/unobserved inventory schemas are excluded;
+real prompt snippets/guidelines remain counted. Pi-reported header usage is a
+separate total, not an exact sum of category estimates. Sanitize every notice, since configuration text is untrusted. Cap the
 block at `MAX_NOTICE_LINES` (3) rows; when notices do not fit, keep the rows
 that fit and close with `… +N more`, counting the notices not shown in full.
 They render here rather than through a notification, which the overlay hides.

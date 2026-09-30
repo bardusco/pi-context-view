@@ -24,6 +24,38 @@ injected by other extensions.
 - **Context injections** - explore the hidden parts of the context: the
   system prompt, tool definitions, and extension injections.
 
+## Local fork: native codemode declaration accounting
+
+This branch targets Pi 0.99.1 and keeps the upstream v0.6.0 interface. It observes
+recognized tool declarations at `before_provider_request`, including the expanded
+native `codemode` description, rather than counting every active tool schema.
+Hidden direct schemas stay inspectable as zero-token **Dropped** inventory.
+Prompt snippets and guidelines actually rendered still count.
+
+Before a compatible real request, after invalidation, or on unsupported/malformed
+payloads, a notice says the definition estimate is incomplete; it does not assume
+that the callable inventory was sent. `/context injections` remains Initial:
+a probe snapshot is not later replaced with another request. `/context usage`
+uses compatible latest declaration evidence. Counts are estimates, not tokenizer
+measurements or proof of HTTP delivery, and later provider handlers may still
+change the payload. Existing prompt/message-accounting limitations remain.
+
+No request mutation, extra provider call, raw logging, or capture persistence is
+added. See `doc/CODEMODE-ACCOUNTING-SPEC.md` for the contract and tests.
+
+### Local development and install
+
+```sh
+npm exec --yes --package=pnpm@12.8.1 -- pnpm install
+npm exec --yes --package=pnpm@12.8.1 -- pnpm check
+node scripts/smoke-codemode.mjs
+```
+
+Load this checkout as a local Pi package, replacing (not duplicating) the npm
+`pi-context-view` package declaration. Run `/reload`, send one ordinary prompt,
+then open `/context`. To roll back, replace the local package source with
+`npm:pi-context-view@0.6.0` and reload. No upstream publication is performed.
+
 ## Commands
 
 - `/context` - shorthand for `/context usage`.

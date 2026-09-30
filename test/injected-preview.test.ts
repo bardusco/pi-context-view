@@ -39,7 +39,7 @@ const LEGEND: Record<ContextMarker, { keyword: string; color: ThemeColor; senten
 	dropped: {
 		keyword: "Dropped",
 		color: "toolDiffRemoved",
-		sentence: "parts were replaced by a custom system prompt and are counted nowhere.",
+		sentence: "parts are excluded from this estimate: suppressed prompt content or hidden/unobserved direct tool schemas.",
 	},
 	moved: {
 		keyword: "Moved",

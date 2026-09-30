@@ -96,6 +96,39 @@ test("observation is owned and source payload is unchanged", () => {
 	assert.equal(parseToolDeclarations(Object.freeze({ tools: Object.freeze([codemode]) }), "openai-responses").status, "observed");
 });
 
+test("one declaration is consumed once even if semantic inventory has a label collision", () => {
+	const original = fixture();
+	const collision = createToolItem("tool:other:codemode", extensionSource("other"), "codemode", [{ label: "Definition", text: "duplicate inventory" }]);
+	const snapshot = buildSnapshot([...original.groups.flatMap(g => g.items), collision], original.origin, original.capturedAt);
+	const projected = projectToolDeclarations(snapshot, parseToolDeclarations({ tools: [codemode] }, "openai-responses"));
+	const definitions = leaves(projected).filter(t => t.label === "codemode").flatMap(t => t.sections!).filter(s => s.label === "Definition");
+	assert.equal(definitions.filter(s => !s.dropped).length, 1);
+	assert.equal(definitions.reduce((n, s) => n + s.tokens, 0), Math.ceil(JSON.stringify(codemode).length / 4));
+});
+
+test("declaration limits reject excessive count, depth, visited nodes and accessors without executing getters", () => {
+	let deep: Record<string, unknown> = {};
+	for (let i = 0; i < 70; i++) deep = { nested: deep };
+	assert.equal(parseToolDeclarations({ tools: [{ ...codemode, parameters: deep }] }, "openai-responses").status, "unavailable");
+	assert.equal(parseToolDeclarations({ tools: Array(4097).fill(codemode) }, "openai-responses").status, "unavailable");
+	assert.equal(parseToolDeclarations({ tools: [{ ...codemode, parameters: { nodes: Array(100001).fill(null) } }] }, "openai-responses").status, "unavailable");
+	let reads = 0;
+	const schema = Object.defineProperty({}, "secret", { enumerable: true, get: () => { reads++; return "SECRET"; } });
+	assert.equal(parseToolDeclarations({ tools: [{ ...codemode, parameters: schema }] }, "openai-responses").status, "unavailable");
+	assert.equal(reads, 0);
+});
+
+test("namespace wrapper and embedded codemode count once, while partial hidden tools keep prompt-line cost", () => {
+	const wrapper = { type: "namespace", name: "functions", description: "Namespace", tools: [codemode] };
+	const projected = projectToolDeclarations(fixture(), parseToolDeclarations({ tools: [wrapper] }, "openai-responses"));
+	const tools = leaves(projected);
+	assert.equal(tools.find(t => t.label === "codemode")!.tokens, 0);
+	assert.equal(tools.find(t => t.label === "namespace:functions")!.text, JSON.stringify(wrapper));
+	assert.equal(tools.find(t => t.label === "namespace:functions")!.tokens, Math.ceil(JSON.stringify(wrapper).length / 4));
+	assert.equal(tools.find(t => t.label === "hidden")!.dropped, undefined, "a real guideline still contributes");
+	assert.equal(projected.totalTokens, Math.ceil(JSON.stringify(wrapper).length / 4) + Math.ceil("\n- Real prompt guideline".length / 4));
+});
+
 test("latest capture is branch-prefix/loadout bound and invalidation never revives stale declarations", () => {
 	const capture = new ToolDeclarationCapture();
 	assert.equal(capture.read("model/loadout", ["root"]).status, "unavailable");
