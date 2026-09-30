@@ -26,7 +26,7 @@ const PATCH: SystemMessage = {
 	toolsAdded: [SECOND_TOOL], toolsRemoved: [{ name: "read" }],
 };
 const CURRENT_TOOL: ToolInfo = {
-	...SECOND_TOOL, description: "CURRENT definition must not replace the recorded one",
+	...SECOND_TOOL, exposure: "direct", description: "CURRENT definition must not replace the recorded one",
 	parameters: {} as ToolInfo["parameters"],
 	sourceInfo: { source: "npm:search", path: "/search.ts", scope: "temporary", origin: "top-level" },
 };

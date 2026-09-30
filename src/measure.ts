@@ -898,7 +898,7 @@ function createItem(
 }
 
 /** Build a tool item whose raw text is exactly the concatenation of its sections. */
-function createToolItem(
+export function createToolItem(
 	id: string,
 	source: InjectionSource,
 	label: string,
@@ -940,7 +940,7 @@ const CHILD_SEPARATOR = "\n";
  * whose preview presents every child as its own labeled part, so each child
  * keeps its subheader, token share, and marked JSON run.
  */
-function createAggregateItem(
+export function createAggregateItem(
 	id: string,
 	kind: InjectionKind,
 	source: InjectionSource,

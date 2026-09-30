@@ -52,6 +52,7 @@ function skill(
 function tool(name: string, source: string): ToolInfo {
 	return {
 		name,
+		exposure: "direct",
 		description: `${name} description`,
 		parameters: {} as ToolInfo["parameters"],
 		promptGuidelines: [`Use ${name}`],

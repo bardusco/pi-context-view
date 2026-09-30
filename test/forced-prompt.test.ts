@@ -14,6 +14,7 @@ import { FORCED_SYSTEM_PROMPT } from "./fixtures/forced-prompt.ts";
 const CWD = "/fixture";
 const SEARCH: ToolInfo = {
 	name: "search",
+	exposure: "direct",
 	description: "Search",
 	parameters: {} as ToolInfo["parameters"],
 	promptGuidelines: ["Cite sources"],
