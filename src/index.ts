@@ -7,7 +7,7 @@
 import { buildSessionContext, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { branchHasContextChange, declarationEvidence, type DeclarationEvidence } from "./declaration-evidence.ts";
 import {
-	declarationNotice, projectToolDeclarations, ToolDeclarationCapture, UNOBSERVED_DECLARATIONS,
+	declarationNotice, initialDeclarationNotice, projectToolDeclarations, ToolDeclarationCapture, UNOBSERVED_DECLARATIONS,
 	type DeclarationObservation,
 } from "./tool-declarations.ts";
 
@@ -214,7 +214,7 @@ export default function (pi: ExtensionAPI) {
 				await showInjectionsView(ctx, {
 					snapshot: projectToolDeclarations(initial.snapshot, initialDeclarations),
 					degradedReason: initial.degradedReason,
-					notices: [declarationNotice(initialDeclarations)],
+					notices: [initialDeclarationNotice(initialDeclarations, initial.snapshot.origin)],
 				});
 				return;
 			}

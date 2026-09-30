@@ -84,6 +84,9 @@ schema previews are inventory and do not contribute to TOTAL. Prompt snippets
 and guidelines actually rendered still count. Observed provider-only declarations
 and complete OpenAI namespace wrappers appear under `unattributed` and count once.
 Later requests do not change Initial; use Usage for compatible latest declarations.
+For a probe-created Initial, say it was captured without a provider request and stays
+frozen. Never use a generic "no request observed yet" notice that could imply later
+real-turn requests were not observed either.
 
 ## Injection preview
 

@@ -107,6 +107,6 @@ test("branch context edits invalidate, while ordinary appended messages keep the
 test("Initial request correlation is one-shot and cannot mix a later followup", async () => {
 	const h = harness(); h.start();
 	h.emit("turn_end"); h.emit("turn_start"); h.observe("TOO_LATE_FOR_INITIAL");
-	assert.match(await h.open("injections"), /No compatible provider request observed yet/);
+	assert.match(await h.open("injections"), /No provider declarations observed for this Initial snapshot/);
 	assert.match(await h.open("usage"), /Tool definitions observed/);
 });

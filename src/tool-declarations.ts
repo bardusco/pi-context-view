@@ -16,9 +16,9 @@ export type DeclarationObservation =
 	| { readonly status: "observed"; readonly tools: readonly ObservedToolDeclaration[] }
 	| { readonly status: "unavailable"; readonly reason: string };
 
-export const UNOBSERVED_DECLARATIONS: DeclarationObservation = {
+export const UNOBSERVED_DECLARATIONS = {
 	status: "unavailable", reason: "No compatible provider request observed yet.",
-};
+} as const satisfies DeclarationObservation;
 const unavailable = (reason: string): DeclarationObservation => ({ status: "unavailable", reason });
 const record = (value: unknown): value is Record<string, unknown> =>
 	value !== null && typeof value === "object" && !Array.isArray(value);
@@ -53,12 +53,19 @@ export function parseToolDeclarations(payload: unknown, api: string | undefined)
 	};
 	const validFunction = (value: unknown): value is Record<string, unknown> & { name: string } =>
 		named(value) && (value.description === undefined || typeof value.description === "string") && record(value.parameters);
+	const validGrammar = (value: unknown): boolean => record(value) &&
+		(value.syntax === "lark" || value.syntax === "regex") && typeof value.definition === "string" && value.definition.trim().length > 0;
+	const validCustom = (value: unknown, nested = false): value is Record<string, unknown> & { name: string } =>
+		named(value) && (value.description === undefined || typeof value.description === "string") &&
+		record(value.format) && value.format.type === "grammar" && validGrammar(nested ? value.format.grammar : value.format);
+	const validResponsesTool = (value: unknown): value is Record<string, unknown> & { name: string } =>
+		record(value) && (value.type === "function" ? validFunction(value) : value.type === "custom" && validCustom(value));
 	try {
 		for (const tool of payload.tools) {
 			if (!record(tool)) return unavailable("Malformed provider declaration.");
 			if (openai && tool.type === "namespace") {
 				// Keep namespace framing and all nested declarations once as one opaque tool row.
-				if (!named(tool) || !Array.isArray(tool.tools) || !tool.tools.every(t => record(t) && t.type === "function" && validFunction(t))) {
+				if (!named(tool) || !Array.isArray(tool.tools) || !tool.tools.every(validResponsesTool)) {
 					return unavailable("Unsupported or malformed namespace declaration.");
 				}
 				for (const child of tool.tools) {
@@ -66,10 +73,12 @@ export function parseToolDeclarations(payload: unknown, api: string | undefined)
 					names.add(child.name);
 				}
 				if (!add(`namespace:${tool.name}`, tool)) return unavailable("Duplicate or excessive provider declarations.");
-			} else if (openai && tool.type === "function" && validFunction(tool)) {
+			} else if (openai && validResponsesTool(tool)) {
 				if (!add(tool.name, tool)) return unavailable("Duplicate or excessive provider declarations.");
 			} else if (completions && tool.type === "function" && validFunction(tool.function)) {
 				if (!add(tool.function.name, tool)) return unavailable("Duplicate or excessive provider declarations.");
+			} else if (completions && tool.type === "custom" && validCustom(tool.custom, true)) {
+				if (!add(tool.custom.name, tool)) return unavailable("Duplicate or excessive provider declarations.");
 			} else if (anthropic && named(tool) && record(tool.input_schema) && (tool.type === undefined || tool.type === "custom")) {
 				if (!add(tool.name, tool)) return unavailable("Duplicate or excessive provider declarations.");
 			} else if (google && Array.isArray(tool.functionDeclarations) && Object.keys(tool).every(k => k === "functionDeclarations")) {
@@ -160,6 +169,17 @@ export class ToolDeclarationCapture {
 		return latest.observation;
 	}
 	invalidate(): void { this.latest = undefined; }
+}
+
+/** A historical Initial must not imply later real requests were never observed. */
+export function initialDeclarationNotice(observation: DeclarationObservation, origin: InitialSnapshot["origin"]): string {
+	if (observation.status === "unavailable" && observation.reason === UNOBSERVED_DECLARATIONS.reason) {
+		const reason = origin === "synthetic-probe"
+			? "This Initial snapshot was captured by a silent probe without a provider request. It stays frozen; open Usage for later real-turn declarations."
+			: "No provider declarations observed for this Initial snapshot. Open Usage for current real-turn evidence.";
+		return declarationNotice(unavailable(reason));
+	}
+	return declarationNotice(observation);
 }
 
 /** Fixed, non-payload notice; never describe an observation as proof of HTTP delivery. */

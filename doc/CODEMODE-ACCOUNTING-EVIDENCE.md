@@ -29,6 +29,18 @@ git diff --check
 - Repeated open/Enter preview/reopen/reload performed no additional provider requests. Reload showed incomplete declaration evidence rather than reusing stale process memory. The probe-created Initial stayed unobserved; the real-prompt-first Initial in the other order received matching evidence.
 - Temporary test processes, server, agent directory and synthetic sessions/output were cleaned up.
 
+## Follow-up: native GPT-6 Luna grammar (owner report)
+
+The owner's Usage view rejected a real declaration as unsupported/malformed. Metadata-only inspection of the selected GPT-6 Luna model confirmed `supportsOpenAIGrammarTools=true`; native Pi 0.99.1 serializes codemode as a `custom` grammar declaration when that flag is enabled. The original synthetic smoke left it false and covered only the JSON-schema function fallback. No real provider payload was read or logged.
+
+- Pre-code focused contract review found no blockers; it emphasized the distinct Responses/Completions grammar nesting and native-serializer proof before implementing validators.
+- Fault-first native CLI smoke with actual grammar capabilities failed at the Usage observed-notice assertion. Four new positive grammar tests also failed (`unavailable` instead of `observed`) before the parser fix.
+- Added explicit bounded opaque Lark/regex recognition for Responses and Completions, plus mixed function/custom namespace children with consume-once global deduplication. Unknown/malformed/mixed/oversized grammars still invalidate the whole set. No grammar parsing/evaluation or lifecycle widening.
+- Canonical check now passes **274 tests**, zero failures/skips, with typecheck clean.
+- Real CLI/PTY smoke now passes **six runs**: Responses function fallback, Responses native custom grammar and Completions nested custom grammar, each in both extension orders. The emitted grammar format is asserted from actual HTTP serialization, not reconstructed argv or a hand-built declaration alone. Probes/open/reopen/reload make no extra requests; response-hook sentinel matches the actual request count.
+- Startup readiness now waits boundedly for the initialized provider/model footer; the earlier banner can render while Pi still refuses input as startup-in-progress.
+- Probe Initial remains frozen, but its notice explicitly describes the historical silent probe and directs the user to Usage. This corrects ambiguous wording, not capture correlation.
+
 ## Remaining limits
 
 - The hook observes its own position in registration order, not guaranteed final HTTP delivery; later handlers can change the payload. The installed fork should be last in the configured package list.

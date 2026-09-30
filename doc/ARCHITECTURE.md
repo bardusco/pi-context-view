@@ -343,15 +343,21 @@ The observer never modifies a payload, starts a request, logs raw data, or persi
   zero-token Dropped inventory. Preserve prompt snippets/guidelines actually rendered.
 - Unsupported/malformed/oversized declarations invalidate the whole set. Unknown evidence
   is not an authoritative empty set: exclude definitions and show that estimates are incomplete.
-- OpenAI namespace declarations count once as a complete `namespace:NAME` row; nested direct
-  inventory is not added again. Google is a semantic per-function estimate, without group framing.
+- OpenAI Responses accepts native custom grammar declarations (`format.type=grammar`,
+  `syntax=lark|regex`, nonempty `definition`) as well as JSON-schema functions. Chat
+  Completions nests grammar under `custom.format.grammar`. Grammar is opaque bounded
+  declaration text, never parsed/evaluated; unknown formats invalidate the whole set.
+- OpenAI namespace declarations count once as a complete `namespace:NAME` row; function
+  and custom-grammar children are reserved for deduplication, never added again.
+  Google is a semantic per-function estimate, without group framing.
 - Initial's declaration record is one-shot, correlated to the first real capture's local turn,
   identical branch IDs, and loadout key; probes never arm it. Later requests only update Usage.
 - Usage accepts the latest observation only for an identical model/loadout hash and an exact
   branch prefix. Session/tree/model/compaction changes, new runs, context edits, loadout drift,
   and parse failures invalidate it. A historical Initial record does not become current Usage evidence.
 - Both views state the observation scope, incomplete fallback, and inventory semantics in a
-  non-collapsing notice. Char-based estimates are not measured token breakdowns; Pi's reported
+  non-collapsing notice. An unobserved Initial notice explicitly identifies a historical
+  silent-probe snapshot and directs the user to Usage for later real-turn evidence. Char-based estimates are not measured token breakdowns; Pi's reported
   total remains independent and may differ. Later provider handlers can still rewrite the request.
 
 ## Usage and Attribution

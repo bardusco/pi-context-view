@@ -29,13 +29,16 @@ injected by other extensions.
 This branch targets Pi 0.99.1 and keeps the upstream v0.6.0 interface. It observes
 recognized tool declarations at `before_provider_request`, including the expanded
 native `codemode` description, rather than counting every active tool schema.
+Native OpenAI custom grammar declarations (Lark/regex) and the JSON-schema function
+fallback are both recognized. Grammar text stays opaque and is never executed.
 Hidden direct schemas stay inspectable as zero-token **Dropped** inventory.
 Prompt snippets and guidelines actually rendered still count.
 
 Before a compatible real request, after invalidation, or on unsupported/malformed
 payloads, a notice says the definition estimate is incomplete; it does not assume
 that the callable inventory was sent. `/context injections` remains Initial:
-a probe snapshot is not later replaced with another request. `/context usage`
+a probe snapshot is not later replaced with another request. Its notice explicitly
+labels that historical probe; it does not claim later requests were never observed. `/context usage`
 uses compatible latest declaration evidence. Counts are estimates, not tokenizer
 measurements or proof of HTTP delivery, and later provider handlers may still
 change the payload. Existing prompt/message-accounting limitations remain.

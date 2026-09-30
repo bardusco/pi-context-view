@@ -89,7 +89,15 @@ async function main() {
   const server = createServer(async (req, res) => {
     let body = '';
     for await (const part of req) { body += part; if (body.length > 4 * 1024 * 1024) break; }
-    if (req.url?.endsWith('/responses') && req.method === 'POST') {
+    if (req.url?.endsWith('/chat/completions') && req.method === 'POST') {
+      requests.push(JSON.parse(body)); responseCount++;
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      for (const chunk of [
+        { id: `smoke-${responseCount}`, object: 'chat.completion.chunk', created: 0, model: 'smoke-model', choices: [{ index: 0, delta: { role: 'assistant', content: 'SYNTHETIC_SMOKE_REPLY' }, finish_reason: null }] },
+        { id: `smoke-${responseCount}`, object: 'chat.completion.chunk', created: 0, model: 'smoke-model', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 } },
+      ]) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      res.end('data: [DONE]\n\n');
+    } else if (req.url?.endsWith('/responses') && req.method === 'POST') {
       try { requests.push(JSON.parse(body)); } catch { requests.push({ invalid: true }); }
       responseCount++;
       const reply = { id: `smoke-${responseCount}`, object: 'response', status: 'completed',
@@ -130,10 +138,23 @@ async function main() {
       ['input-transform.ts', 'forced-prompt.ts', 'marker.ts'],
     ];
     const allDisplays = [];
-    for (let run = 0; run < orders.length; run++) {
+    for (let run = 0; run < orders.length * 3; run++) {
       requests = []; responseCount = 0; chunks.length = 0;
-      const sequence = run === 0 ? [path.join(ROOT, 'src/index.ts'), ...orders[run].map(f => path.join(FIXTURES, f))]
-        : [...orders[run].map(f => path.join(FIXTURES, f)), path.join(ROOT, 'src/index.ts')];
+      const order = run % orders.length;
+      const grammar = run >= orders.length;
+      const completions = run >= orders.length * 2;
+      // Match the real GPT-6 Luna capability flags; native Pi owns serialization.
+      const modelsPath = path.join(agentDir, 'models.json');
+      const modelConfig = JSON.parse(await readFile(modelsPath, 'utf8'));
+      modelConfig.providers['smoke-openai'].api = completions ? 'openai-completions' : 'openai-responses';
+      modelConfig.providers['smoke-openai'].models[0].compat = {
+        supportsStrictMode: true, supportsOpenAIGrammarTools: grammar,
+        supportsAdditionalTools: true, supportsToolSearch: true,
+        supportsMidConvoSystemMessages: true, supportsExplicitPromptCacheMode: true,
+      };
+      await writeFile(modelsPath, JSON.stringify(modelConfig));
+      const sequence = order === 0 ? [path.join(ROOT, 'src/index.ts'), ...orders[order].map(f => path.join(FIXTURES, f))]
+        : [...orders[order].map(f => path.join(FIXTURES, f)), path.join(ROOT, 'src/index.ts')];
       const sentinel = path.join(temp, `responses-${run}.txt`);
       const sentinelExtension = path.join(temp, `sentinel-${run}.ts`);
       await writeFile(sentinelExtension, `import { appendFileSync } from 'node:fs'; export default function(pi) { pi.on('after_provider_response', () => { appendFileSync(${JSON.stringify(sentinel)}, 'response\\n'); }); }`);
@@ -146,20 +167,21 @@ async function main() {
       pi.stdout.on('data', d => boundedPush(chunks, d.toString('utf8')));
       pi.stderr.on('data', d => { stderr = (stderr + d.toString()).slice(-4096); });
       const send = async (s, delay = 800) => { if (!pi || pi.killed) return; pi.stdin.write(s); await wait(delay); };
-      await wait(1700);
+      const startupDeadline = Date.now() + 8000;
+      while (!/\(smoke-openai\) smoke-model/.test(stripAnsi(chunks.join(''))) && pi.exitCode === null && Date.now() < startupDeadline) await wait(100);
       const firstOutput = stripAnsi(chunks.join(''));
       // Prompt input is intentionally not echoed by some supported renderers.
       // The visible base TUI is confirmed by the footer/model label instead.
-      assert(/smoke-model/.test(firstOutput), `Pi TUI did not start: ${firstOutput.slice(-1200)}`);
+      assert(/\(smoke-openai\) smoke-model/.test(firstOutput), `Pi TUI did not start (exit ${pi.exitCode}): ${firstOutput.slice(-1200)} ${stripAnsi(stderr).slice(-1000)}`);
       let screen;
-      if (run === 0) {
+      if (order === 0) {
         // A probe Initial stays historical/unobserved even after a later real prompt.
         pi.stdin.write('/context injections\r');
         await wait(2600);
         assert(requests.length === 0, `first /context probe made ${requests.length} provider requests`);
         assert(await readFile(sentinel, 'utf8').catch(() => '') === '', 'probe hit provider-response sentinel');
         screen = stripAnsi(chunks.join(''));
-        assert(/Context Injections|INITIAL/.test(screen), 'first /context did not render the injections overlay');
+        assert(/Context Injections|INITIAL/.test(screen), `first /context did not render the injections overlay: ${screen.slice(-3500)}`);
         assert(/estimates are incomplete/.test(screen), 'probe must explicitly show unobserved definitions');
         pi.stdin.write('\x1b'); await wait(500);
       }
@@ -170,7 +192,13 @@ async function main() {
       const observed = payload.tools;
       assert(Array.isArray(observed) && observed.length === 1, `Expected one declaration, got ${JSON.stringify(observed?.map(t => ({ type: t.type, name: t.name })))}`);
       const codemode = observed[0];
-      assert(codemode.name === 'codemode' || codemode.name === 'namespace:codemode', `Unexpected declared tool: ${codemode.name}`);
+      const definition = completions ? codemode.custom : codemode;
+      assert(definition.name === 'codemode', `Unexpected declared tool: ${definition.name}`);
+      assert(codemode.type === (grammar ? 'custom' : 'function'), 'native serializer did not select the expected grammar/function surface');
+      if (grammar) {
+        const format = completions ? definition.format?.grammar : definition.format;
+        assert(definition.format?.type === 'grammar' && format.syntax === 'lark' && format.definition.length > 0, 'native grammar declaration shape mismatch');
+      }
       const declarationText = JSON.stringify(codemode);
       assert(declarationText.includes('smoke_synthetic'), 'codemode declaration omits synthetic callable tool');
       assert(declarationText.includes('marker') && declarationText.includes('string'), 'codemode declaration omits expanded synthetic signature');
@@ -187,7 +215,7 @@ async function main() {
       chunks.length = 0;
       pi.stdin.write('/context injections\r'); await wait(1400);
       screen = stripAnsi(chunks.join(''));
-      assert(run === 0 ? /estimates are incomplete/.test(screen) : /Tool definitions observed at the provider hook/.test(screen), 'Initial declaration provenance is incorrect');
+      assert(order === 0 ? /estimates are incomplete/.test(screen) : /Tool definitions observed at the provider hook/.test(screen), 'Initial declaration provenance is incorrect');
       assert(/smoke_synthetic/.test(screen) && /0.*Dropped/.test(screen), 'hidden synthetic tool is not shown as Dropped 0');
       pi.stdin.write('\r'); await wait(700); // Enter selects the initially focused row for preview.
       pi.stdin.write('\x1b'); await wait(450);
@@ -212,7 +240,7 @@ async function main() {
       // SSE parser execution is covered by the response-hook sentinel and the successful observed Usage above.
       if (stderr && /error|failed/i.test(stderr)) console.error(`run ${run + 1} stderr (bounded): ${stripAnsi(stderr).slice(-1000)}`);
     }
-    console.log(`PASS: real Pi ${piVersion} PTY, first silent /context probe made no provider request; synthetic prompt reached local Responses server; only codemode was serialized with expanded smoke_synthetic signature; notice/Dropped 0/preview/reopen/reload checked; fixture extension orders both exercised with provider-response sentinel.`);
+    console.log(`PASS: real Pi ${piVersion} PTY, first silent /context probe made no provider request; synthetic prompt reached local Responses server; only codemode was serialized with expanded smoke_synthetic signature; notice/Dropped 0/preview/reopen/reload checked; Responses function fallback + native custom grammar + Completions nested custom grammar exercised in both fixture extension orders with provider-response sentinel.`);
   } finally {
     if (pi && !pi.killed) pi.kill('SIGTERM');
     await new Promise(resolve => server.close(resolve));

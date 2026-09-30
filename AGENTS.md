@@ -14,7 +14,7 @@ The command accepts only `usage`, `injections`, and `config`; keep both views un
 - Provider declaration accounting and its test matrix live in `doc/CODEMODE-ACCOUNTING-SPEC.md`. Never infer visible schemas from active tools; preserve zero-cost inventory previews and real prompt-line ownership.
 - `src/tool-declarations.ts` is the passive bounded declaration parser/projector; `src/declaration-evidence.ts` owns freshness metadata. Keep provider payloads and raw captures process-local, never mutate or persist them.
 - Development targets Pi 0.99.1. The upstream workspace config needs modern pnpm; on this machine use `npm exec --yes --package=pnpm@12.8.1 -- pnpm check` (pnpm 9 rejects the workspace file).
-- `node scripts/smoke-codemode.mjs` is the isolated real-CLI/PTY smoke, with a synthetic loopback provider and no personal credentials/data.
+- `node scripts/smoke-codemode.mjs` is the isolated real-CLI/PTY smoke, with a synthetic loopback provider and no personal credentials/data. Cover both function fallback and native custom grammar (`supportsOpenAIGrammarTools=true`), in both fixture orders; grammar-fix contract: `doc/CODEMODE-GRAMMAR-FIX-SPEC.md`.
 
 ## Sources of truth
 
