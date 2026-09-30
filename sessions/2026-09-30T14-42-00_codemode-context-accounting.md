@@ -1,0 +1,12 @@
+# Codemode context accounting — 2026-09-30
+
+Session: `/Users/bardusco/.pi/agent/sessions/--Users-bardusco-Projects-taubot_monorepo--/2026-09-30T12-49-29-322Z_01a0f25c-e4e9-709c-9a7b-7d44814a79e0.jsonl`
+
+- Configured native Pi codemode-only and selected `pi-context-view` as the preferred drill-down UI; disabled the older report-writing context command.
+- Built a local-only fork at `/Users/bardusco/Projects/pi-context-view`, branch `fix/codemode-payload-accounting`, from upstream v0.6.0. Commit `dd2baf6` adds bounded, passive provider declaration observation/projection and freshness checks; commit `990dabc` adds GPT-6 Luna's native OpenAI custom grammar declaration support. No upstream PR/push, npm publish, tag, merge or deployment was performed.
+- Real-user finding: enabling `supportsOpenAIGrammarTools` serializes codemode as opaque native custom grammar rather than the function-schema fallback. The first synthetic smoke omitted this capability and falsely left a coverage gap. Fault-first native serializer smoke caught it; the current smoke exercises both surfaces and both extension orders.
+- Validation at final code snapshot `990dabcd4d8b282c2948a9b042cf1292dd5667e1`: typecheck + 274 tests passed; six synthetic loopback Pi CLI/PTY runs passed (Responses function, Responses grammar, Completions nested grammar × two fixture orders); global Pi startup/help passed. Branch-wide final reviewer verdict READY.
+- Owner's final TUI output confirmed Usage says “Tool definitions observed at the provider hook,” with Built-in Tools ~4.5k, Custom Tools ~1.9k and Pi-reported context ~73k/272k. These are estimates; hook observation does not prove provider wire delivery/tokenizer totals. Initial remains a historical silent-probe snapshot and is now clearly labelled as such.
+- Learned: inspect effective provider capability metadata and exercise Pi's actual serializer in the isolated smoke; function-only fixtures are not sufficient for a grammar-capable model. Historical Initial and latest Usage observations have different time scopes and must not be conflated.
+- Extension is configured as a local absolute package source in `~/.pi/agent/settings.json`; codemode-only remains enabled. A protected backup exists at `/Users/bardusco/.pi/agent/settings.json.bak-pre-context-view-fork-20260930T122201`.
+- No pending TODO: the targeted native grammar gap, historical notice, tests and README/architecture contracts were corrected in the same slice. No PR/deploy delivery event occurred.

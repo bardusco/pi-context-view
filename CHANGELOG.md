@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (local fork)
+
+### Fixed
+* `[codemode]` Count native OpenAI function and custom-grammar declarations observed at Pi's provider hook; retain callable but unadvertised schemas as zero-cost Dropped inventory.
+* `[injections]` Explain that a probe-created Initial is a frozen historical snapshot; use Usage for later real-turn declaration evidence.
+
 
 ## `[v0.6.0]` - 20.09.2026
 
